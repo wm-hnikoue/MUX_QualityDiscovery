@@ -32,3 +32,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _RENDITIONINFO._serialized_start=3547
   _RENDITIONINFO._serialized_end=3623
 # @@protoc_insertion_point(module_scope)
+
+# COMMAND ----------
+
+
