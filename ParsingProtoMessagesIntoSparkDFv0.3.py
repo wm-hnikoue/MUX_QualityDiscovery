@@ -10,9 +10,11 @@
 # MAGIC TBD
 # MAGIC 
 # MAGIC ## Current Status
-# MAGIC Can read one file into a spark dataframe but the udf functionality to generalize to all files in a folder breaks down
+# MAGIC Can read multipe files into a spark dataframe without using Spark udf functionality to paralellize the process
 # MAGIC ## Next
-# MAGIC Read multiple files at once
+# MAGIC - automate schema definition to define the schema directly from the proto class definition or the object definition
+# MAGIC - automate the passing of data from s3 to dbfs based on a desired date
+# MAGIC - move to v0.4
 # MAGIC 
 # MAGIC *This file follows ParsingProtoMessagesIntoSparkDFv0.2 and cleans up the most promising process*
 
@@ -398,28 +400,6 @@ for i, chosen_test_file in enumerate(list_of_test_files):
   else:
     mux_spark_df = new_spark_df 
 display(mux_spark_df)
-
-# COMMAND ----------
-
-display(new_spark_df)
-
-# COMMAND ----------
-
-chosen_test_file2 = np.random.choice([path_record[0].replace("dbfs:/", "/dbfs/") for path_record in list_of_test_files])
-print(chosen_test_file2)
-
-# COMMAND ----------
-
-second_spark_df = convert_proto_file_name_to_spark_df(chosen_test_file2)
-
-# COMMAND ----------
-
-union_df = second_spark_df.union(new_spark_df)
-union_df.show()
-
-# COMMAND ----------
-
-display(union_df)
 
 # COMMAND ----------
 
