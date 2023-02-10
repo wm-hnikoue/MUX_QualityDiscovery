@@ -29,6 +29,7 @@
 import os
 import sys
 import numpy as np
+np.random.seed(48)
 import inspect
 from pprint import PrettyPrinter
 from typing import Iterator, Dict, List
@@ -75,7 +76,8 @@ dbutils.fs.ls("FileStore/CAP/QoS_QoE/MUXBatchIngestionTestFiles")
 # COMMAND ----------
 
 # copy files to new location
-dbutils.fs.cp("s3://mux-dplusna-finalized-view-data/2023/01/24", "FileStore/CAP/QoS_QoE/MUXBatchIngestionTestFiles",True)
+file_date = "2023/01/24"
+# dbutils.fs.cp("s3://mux-dplusna-finalized-view-data/" + file_date, "FileStore/CAP/QoS_QoE/MUXBatchIngestionTestFiles",True)
 
 # COMMAND ----------
 
@@ -314,12 +316,29 @@ def get_dir_content(ls_path):
 
 # COMMAND ----------
 
+def get_sampled_dir_content(ls_path, prop=0.25):
+  """
+  Read a sample of each subdirectory so that you don't have to wait for ever to get the data needed
+  """
+  dir_paths = dbutils.fs.ls(ls_path)
+  subdir_paths = [get_dir_content(p.path) for p in dir_paths if p.isDir() and p.path != ls_path]
+  flat_subdir_paths = [p for subdir in subdir_paths for p in np.random.choice(subdir, int(prop * len(subdir)))]
+  return list(map(lambda p: p.path, dir_paths)) + flat_subdir_paths
+
+# COMMAND ----------
+
 # list my files
-#list_of_test_files = list(dbutils.fs.ls("FileStore/CAP/QoS_QoE/test"))
 list_of_all_files = get_dir_content("FileStore/CAP/QoS_QoE/MUXBatchIngestionTestFiles")
-list_of_test_files = [path_record.replace("dbfs:/", "/dbfs/") for path_record in list_of_all_files if 'discovery-mux-dplusna' in path_record]
+list_of_all_sampled_files = get_sampled_dir_content("FileStore/CAP/QoS_QoE/MUXBatchIngestionTestFiles", prop=0.05)
+list_of_test_files = [path_record.replace("dbfs:/", "/dbfs/") for path_record in list_of_all_sampled_files if 'discovery-mux-dplusna' in path_record]
 #chosen_test_file = np.random.choice(list_of_test_files)
 #print(chosen_test_file)
+
+# COMMAND ----------
+
+num_files = len(list_of_test_files)
+print("There are {} files to ingest out of {}".format(num_files, len(list_of_all_files)))
+print(" 20% of flights is {}".format(0.2 * len(list_of_all_files)))
 
 # COMMAND ----------
 
@@ -328,6 +347,7 @@ list_of_test_files = [path_record.replace("dbfs:/", "/dbfs/") for path_record in
 
 # COMMAND ----------
 
+#reduced_list = np.random.choice(list_of_test_files, int(0.25 * num_files) )
 for i, chosen_test_file in enumerate(list_of_test_files):
   print(f"file ({i}): {chosen_test_file} ")
   new_spark_df = convert_proto_file_name_to_spark_df(chosen_test_file)
@@ -335,8 +355,41 @@ for i, chosen_test_file in enumerate(list_of_test_files):
     mux_spark_df = mux_spark_df.union(new_spark_df)
   else:
     mux_spark_df = new_spark_df 
-display(mux_spark_df)
+print(f"{i + 1} files were read")
+
 
 # COMMAND ----------
 
+display(mux_spark_df.take(10))
 
+# COMMAND ----------
+
+# save the table somwhere safe
+file_date = "2023/01/24"
+dbutils.fs.mkdirs("/FileStore/CAP/QoS_QoE/MUXBatchTable/")
+file_to_be_saved = "/FileStore/CAP/QoS_QoE/MUXBatchTable/" + file_date.replace("/", '_')
+print("file to be saved: {}".format(file_to_be_saved))
+mux_spark_df.write.format("delta").mode("overwrite").save(file_to_be_saved)
+#Below we are listing the data in destination path
+display(dbutils.fs.ls("/FileStore/tables/delta_train/"))
+
+# COMMAND ----------
+
+# save to data table 
+file_date = "2023/01/24"
+table_name = "mux_daily_sampled_data" + file_date.replace("/", '_')
+mux_spark_df.write.saveAsTable(table_name)
+
+# COMMAND ----------
+
+print((mux_spark_df.count(), len(mux_spark_df.columns)))
+
+# COMMAND ----------
+
+display(spark.sql(f'DESCRIBE DETAIL {table_name}'))
+
+# COMMAND ----------
+
+# Read a table
+mux_delta_table_df = spark.read.table(table_name)
+display(mux_delta_table
